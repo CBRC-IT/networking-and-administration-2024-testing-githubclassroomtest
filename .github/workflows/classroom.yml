@@ -1,32 +1,52 @@
-name: Autograding Tests
-'on':
-- push
-- repository_dispatch
-permissions:
-  checks: write
-  actions: read
-  contents: read
+name: Unit Test and Reveal CTF Flag
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
 jobs:
-  run-autograding-tests:
+  build:
     runs-on: ubuntu-latest
-    if: github.actor != 'github-classroom[bot]'
+
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
-    - name: wefwefwf
-      id: wefwefwf
-      uses: classroom-resources/autograding-io-grader@v1
+      uses: actions/checkout@v2
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
       with:
-        test-name: wefwefwf
-        setup-command: ''
-        command: cat secret.flag.000
-        input: ''
-        expected-output: cbrc_CTF{1234567890}
-        comparison-method: exact
-        timeout: 10
-    - name: Autograding Reporter
-      uses: classroom-resources/autograding-grading-reporter@v1
-      env:
-        WEFWEFWF_RESULTS: "${{steps.wefwefwf.outputs.result}}"
+        python-version: '3.x'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run tests
+      id: tests
+      run: |
+        pytest > result.log
+        if grep -q "FAILURES" result.log; then
+          exit 1
+        fi
+
+    - name: Provide feedback
+      if: success()
+      uses: actions/github-script@v5
       with:
-        runners: wefwefwf
+        script: |
+          const { github, context } = require('@actions/github');
+          const pr = context.payload.pull_request;
+          const body = `
+          ### Congratulations! 🎉
+          All your unit tests have passed successfully.
+          Great job! Keep up the good work.
+          
+          Here is your CTF flag: \`${{ secrets.CTF_FLAG }}\`
+          `;
+          github.rest.issues.createComment({
+            ...context.repo,
+            issue_number: pr.number,
+            body: body,
+          });
+
